@@ -1,6 +1,6 @@
 # consilience-tts.github.io
 
-Project page for **Consilience for Verifier-Free Test-Time Scaling** (NeurIPS 2026), live at **https://consilience-tts.github.io**, and home of the **consilify** skill.
+Project page for **[Consilience for Verifier-Free Test-Time Scaling](https://arxiv.org/abs/2608.09898)** (NeurIPS 2026), live at **https://consilience-tts.github.io**, and home of the **consilify** skill.
 
 > Good answers explore before they converge. Consilience samples several reasoning traces and keeps the one that starts uncertain and ends certain, scored from token log-probs alone: `S = C_final − α · C_initial`. No verifier, no voting, no training.
 
@@ -66,11 +66,12 @@ GitHub Pages serves the `main` branch root; `.nojekyll` keeps files served as-is
 ## Citation
 
 ```bibtex
-@inproceedings{kong2026consilience,
-  title     = {Consilience for Verifier-Free Test-Time Scaling},
-  author    = {Kong, Lecheng and Hui, Like and Mao, Haitao and Huan, Jun},
-  booktitle = {Advances in Neural Information Processing Systems},
-  year      = {2026}
+@article{kong2026consilience,
+  title   = {Consilience for Verifier-Free Test-Time Scaling},
+  author  = {Kong, Lecheng and Hui, Like and Mao, Haitao and Huan, Jun},
+  journal = {arXiv preprint arXiv:2608.09898},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2608.09898}
 }
 ```
 
