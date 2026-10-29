@@ -1,0 +1,1257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Consilience · Verifier-Free Test-Time Scaling</title>
+<meta name="description" content="Good answers explore before they converge. Consilience picks the reasoning trace that starts uncertain and ends certain, from token log-probs alone.">
+<meta property="og:title" content="Consilience for Verifier-Free Test-Time Scaling">
+<meta property="og:description" content="Good answers explore before they converge. Consilience picks the trace that starts uncertain and ends certain: no verifier, no voting, no training.">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Page: one 1120px column; charts sit on "surface" cards; series colors come from one validated palette (blue / orange / aqua). */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --raised: #ffffff;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.10);
+  --hover: rgba(11, 11, 11, 0.04);
+  --cons: #2a78d6;
+  --over: #eb6834;
+  --last: #1baf7a;
+  --base: #898781;
+  --cons-wash: rgba(42, 120, 214, 0.12);
+  --over-wash: rgba(235, 104, 52, 0.12);
+  --skip-wash: rgba(11, 11, 11, 0.035);
+  --win-wash: rgba(11, 11, 11, 0.075);
+  --good: #006300;
+  --bad: #d03b3b;
+  --code-bg: #f1f0ec;
+  --tip-bg: #0b0b0b;
+  --tip-ink: #f0efec;
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --col: 1120px;
+  --read: 700px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10); --hover: rgba(255, 255, 255, 0.05);
+    --cons: #3987e5; --over: #d95926; --last: #199e70; --base: #898781;
+    --cons-wash: rgba(57, 135, 229, 0.18); --over-wash: rgba(217, 89, 38, 0.18); --skip-wash: rgba(255, 255, 255, 0.03); --win-wash: rgba(255, 255, 255, 0.075);
+    --good: #0ca30c; --bad: #e66767; --code-bg: #141413; --tip-bg: #f0efec; --tip-ink: #0b0b0b;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10); --hover: rgba(255, 255, 255, 0.05);
+  --cons: #3987e5; --over: #d95926; --last: #199e70; --base: #898781;
+  --cons-wash: rgba(57, 135, 229, 0.18); --over-wash: rgba(217, 89, 38, 0.18); --skip-wash: rgba(255, 255, 255, 0.03); --win-wash: rgba(255, 255, 255, 0.075);
+  --good: #0ca30c; --bad: #e66767; --code-bg: #141413; --tip-bg: #f0efec; --tip-ink: #0b0b0b;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 72px; scroll-behavior: smooth; }
+body {
+  margin: 0; padding-inline: 20px;
+  background: var(--page); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition: none !important; animation: none !important; } }
+a { color: var(--cons); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--cons); outline-offset: 3px; border-radius: 4px; }
+b, strong { font-weight: 600; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+p { margin: 0 0 1em; }
+.wrap { max-width: var(--col); margin: 0 auto; }
+.read { max-width: var(--read); }
+.muted { color: var(--muted); }
+.ink2 { color: var(--ink-2); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- nav ---------- */
+.nav {
+  position: sticky; top: 0; z-index: 40; margin-inline: -20px; padding-inline: 20px;
+  background: color-mix(in srgb, var(--page) 88%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--ring);
+}
+.nav-in { max-width: var(--col); margin: 0 auto; height: 56px; display: flex; align-items: center; gap: 24px; }
+.brand { font-family: var(--font-display); font-size: 24px; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
+.nav-links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
+.nav-links a { color: var(--ink-2); text-decoration: none; }
+.nav-links a:hover { color: var(--ink); }
+.theme-btn {
+  width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--ring);
+  background: var(--surface); color: var(--ink-2); display: grid; place-items: center; cursor: pointer;
+}
+.theme-btn:hover { color: var(--ink); }
+@media (max-width: 760px) { .nav-links a:not(.keep) { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { padding-block: 72px 36px; }
+.eyebrow { font-size: 13px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pill { border: 1px solid var(--ring); background: var(--surface); border-radius: 999px; padding: 3px 11px; letter-spacing: 0.04em; }
+.pill.on { background: var(--ink); color: var(--page); border-color: var(--ink); }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(64px, 11vw, 132px); line-height: 0.92; letter-spacing: -0.025em; margin: 22px 0 6px; }
+.subtitle { font-family: var(--font-display); font-size: clamp(24px, 3vw, 32px); line-height: 1.15; color: var(--ink-2); margin: 0; }
+.thesis { font-family: var(--font-display); font-style: italic; font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -0.01em; color: var(--ink); margin: 34px 0 14px; max-width: 900px; }
+.lede { font-size: 19px; line-height: 1.6; max-width: 640px; color: var(--ink-2); margin: 0; }
+.lede b { color: var(--ink); }
+.hero .nots { margin-top: 16px; }
+.hero .nots span::before { content: none; }
+.authors { margin-top: 26px; font-size: 15.5px; color: var(--ink-2); }
+.authors b { color: var(--ink); font-weight: 500; }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 18px; border-radius: 999px;
+  font-size: 15px; font-weight: 500; text-decoration: none; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--ring); cursor: pointer;
+}
+.btn:hover { background: var(--raised); text-decoration: none; border-color: var(--axis); }
+.btn.primary { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.btn.primary:hover { opacity: 0.88; }
+.btn svg { width: 16px; height: 16px; }
+
+/* ---------- sections ---------- */
+section { padding-block: 64px; }
+section + section { border-top: 1px solid var(--ring); }
+.kicker { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(36px, 5vw, 56px); line-height: 1.04; letter-spacing: -0.015em; margin: 0 0 18px; max-width: 880px; }
+h3 { font-size: 17px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.005em; }
+.section-lede { font-size: 18px; color: var(--ink-2); max-width: var(--read); margin-bottom: 30px; }
+
+/* ---------- cards & figures ---------- */
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 16px; padding: 22px 22px 18px; }
+.fig-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.fig-title { font-weight: 600; font-size: 15.5px; }
+.fig-sub { font-size: 13.5px; color: var(--muted); }
+.caption { font-size: 14px; color: var(--ink-2); margin-top: 12px; line-height: 1.55; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-2); margin: 4px 0 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.key-line { width: 18px; height: 0; border-top: 2px solid; display: inline-block; border-radius: 2px; }
+.key-rect { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.chart { position: relative; width: 100%; outline: none; touch-action: pan-y; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart:focus-visible { outline: 2px solid var(--cons); outline-offset: 4px; border-radius: 8px; }
+svg text { font-family: var(--font-body); }
+.tick { font-size: 11.5px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.axis-label { font-size: 12px; fill: var(--muted); }
+.gridline { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+.baseline { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
+.ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ln-cons { stroke: var(--cons); } .ln-over { stroke: var(--over); } .ln-last { stroke: var(--last); } .ln-base { stroke: var(--base); stroke-width: 1.5; }
+.fill-cons { fill: var(--cons); } .fill-over { fill: var(--over); } .fill-last { fill: var(--last); } .fill-base { fill: var(--base); }
+.wash-cons { fill: var(--cons-wash); } .wash-over { fill: var(--over-wash); } .wash-skip { fill: var(--skip-wash); } .wash-win { fill: var(--win-wash); }
+.dot { stroke: var(--surface); stroke-width: 2; }
+.label { font-size: 12.5px; fill: var(--ink); font-weight: 500; }
+.label-2 { font-size: 12px; fill: var(--ink-2); }
+.halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.xhair { stroke: var(--ink-2); stroke-width: 1; opacity: 0.55; shape-rendering: crispEdges; }
+
+/* tooltip: values lead, labels follow */
+.tip {
+  position: fixed; z-index: 60; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink);
+  border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.45; min-width: 140px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s;
+}
+.tip.on { opacity: 1; transform: none; }
+.tip .t { font-size: 12px; opacity: 0.72; margin-bottom: 3px; }
+.tip .r { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.tip .r b { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 42px; }
+.tip .r i { width: 12px; height: 0; border-top: 2px solid; display: inline-block; }
+.tip .r span { opacity: 0.8; }
+
+/* table views */
+details.tv { margin-top: 10px; font-size: 13.5px; }
+details.tv summary { cursor: pointer; color: var(--muted); width: fit-content; list-style: none; }
+details.tv summary::-webkit-details-marker { display: none; }
+details.tv summary::before { content: "▸ "; }
+details.tv[open] summary::before { content: "▾ "; }
+details.tv summary:hover { color: var(--ink); }
+.tv-scroll { max-height: 280px; overflow: auto; margin-top: 8px; border: 1px solid var(--ring); border-radius: 10px; }
+.tv table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.tv th, .tv td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--ring); white-space: nowrap; }
+.tv th:first-child, .tv td:first-child { text-align: left; }
+.tv th { position: sticky; top: 0; background: var(--surface); font-weight: 600; color: var(--ink-2); }
+
+/* ---------- hook: case study ---------- */
+.case-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 18px; }
+@media (max-width: 860px) { .case-grid { grid-template-columns: 1fr; } }
+.trace-card { border: 1px solid var(--ring); border-radius: 14px; padding: 16px 18px; background: var(--raised); }
+.trace-card header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.trace-card header .who { font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 8px; }
+.verdict { font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--ring); }
+.verdict.ok { color: var(--good); } .verdict.no { color: var(--bad); }
+.stat-inline { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+.stat-inline b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.moment { border-left: 2px solid var(--ring); padding: 6px 0 6px 14px; margin: 10px 0 0; transition: border-color .2s, background .2s; border-radius: 0 8px 8px 0; cursor: pointer; }
+.moment.active { border-left-color: currentColor; background: var(--hover); }
+.moment.over { color: var(--over); } .moment.cons { color: var(--cons); }
+.moment .mhead { font-size: 13px; font-weight: 600; color: var(--ink); display: flex; gap: 8px; align-items: center; }
+.badge { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11.5px; font-weight: 600; color: #fff; flex: none; }
+.badge.over { background: var(--over); } .badge.cons { background: var(--cons); }
+.moment blockquote { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; }
+.moment blockquote mark { background: var(--over-wash); color: var(--ink); border-radius: 3px; padding: 0 2px; }
+.moment.cons blockquote mark { background: var(--cons-wash); }
+.moment p { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); }
+details.problem { margin-top: 14px; border: 1px solid var(--ring); border-radius: 12px; padding: 10px 16px; background: var(--raised); font-size: 14.5px; }
+details.problem summary { cursor: pointer; font-weight: 500; }
+details.problem p { margin: 8px 0 4px; color: var(--ink-2); }
+
+/* ---------- segmented control ---------- */
+.seg { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--page); border: 1px solid var(--ring); gap: 2px; flex-wrap: wrap; }
+.seg button {
+  border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 500;
+  padding: 7px 13px; border-radius: 9px; cursor: pointer;
+}
+.seg button:hover { color: var(--ink); background: var(--hover); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px var(--ring); }
+.seg .n { font-variant-numeric: tabular-nums; color: var(--muted); margin-right: 6px; }
+.hist-verdict { font-family: var(--font-display); font-size: 26px; line-height: 1.2; margin: 14px 0 2px; min-height: 1.2em; }
+.hist-verdict .ok { color: var(--good); } .hist-verdict .no { color: var(--bad); }
+
+/* ---------- quadrant ---------- */
+.quad { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items: stretch; }
+.quad .hdr { font-size: 12.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); display: flex; align-items: end; padding: 0 4px 2px; }
+.quad .rh { display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--ink-2); line-height: 1.3; }
+.qcell { background: var(--surface); border: 1px solid var(--ring); border-radius: 14px; padding: 14px 16px 14px; position: relative; }
+.qcell.star { border-color: var(--cons); box-shadow: 0 0 0 1px var(--cons) inset; }
+.qcell .qn { font-size: 12px; color: var(--muted); font-weight: 500; }
+.qcell h3 { margin-top: 2px; }
+.qcell p { font-size: 14px; color: var(--ink-2); margin: 6px 0 0; line-height: 1.5; }
+.qcell .spark { width: 100%; height: 84px; display: block; margin: 8px 0 4px; }
+.qtag { position: absolute; top: 12px; right: 12px; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ring); color: var(--ink-2); background: var(--raised); display: inline-flex; gap: 6px; align-items: center; }
+.qtag i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+@media (max-width: 760px) {
+  .quad { grid-template-columns: 1fr; }
+  .qtag { position: static; margin-bottom: 8px; }
+  .quad .hdr, .quad .rh { display: none; }
+  .qcell .qaxis { display: block !important; }
+}
+.qaxis { display: none; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+
+/* ---------- formula ---------- */
+.formula-wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 28px; align-items: center; margin: 44px 0 10px; }
+@media (max-width: 860px) { .formula-wrap { grid-template-columns: 1fr; } }
+.formula { font-family: var(--font-display); font-size: clamp(40px, 6vw, 64px); line-height: 1.1; letter-spacing: -0.01em; white-space: nowrap; }
+.formula i { font-style: italic; }
+.formula sub { font-size: 0.42em; font-family: var(--font-body); font-style: normal; letter-spacing: 0; vertical-align: -0.1em; color: var(--ink-2); }
+.formula .a, .greek { font-family: var(--font-body); font-style: normal; font-size: 0.82em; color: var(--ink); }
+.defs { display: grid; gap: 12px; font-size: 15px; color: var(--ink-2); }
+.defs div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: baseline; }
+.defs .sym { font-family: var(--font-display); font-size: 22px; color: var(--ink); font-style: italic; }
+.defs .sym sub { font-family: var(--font-body); font-size: 12px; font-style: normal; color: var(--ink-2); }
+.math { font-family: var(--font-display); font-style: italic; font-size: 1.15em; color: var(--ink); }
+.math sub { font-family: var(--font-body); font-style: normal; font-size: 0.62em; color: var(--ink-2); }
+
+/* ---------- playground ---------- */
+.play { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .play { grid-template-columns: 1fr; } }
+.controls { display: grid; gap: 16px; margin: 6px 0 14px; }
+.ctrl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctrl label output { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ctrl .hint { font-size: 12.5px; color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--cons); height: 28px; margin: 2px 0 0; }
+.picks { display: grid; gap: 8px; margin-bottom: 14px; }
+.pick { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center; padding: 7px 12px; border: 1px solid var(--ring); border-radius: 12px; background: var(--raised); font-size: 14px; }
+.pick .k { width: 18px; height: 0; border-top: 3px solid; border-radius: 2px; }
+.pick .m { color: var(--ink-2); font-size: 12.5px; }
+.pick .res { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.pick .res.ok { color: var(--good); } .pick .res.no { color: var(--bad); }
+.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.board th { text-align: right; font-weight: 600; color: var(--muted); font-size: 12px; padding: 4px 8px; border-bottom: 1px solid var(--ring); }
+.board td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--ring); }
+.board th:nth-child(-n+2), .board td:nth-child(-n+2) { text-align: left; }
+.board tr.top td { background: var(--cons-wash); font-weight: 600; }
+.board tr.top td:first-child { border-radius: 8px 0 0 8px; } .board tr.top td:last-child { border-radius: 0 8px 8px 0; }
+.board .ok { color: var(--good); font-weight: 600; } .board .no { color: var(--bad); font-weight: 600; }
+.board .pat { color: var(--ink-2); font-size: 12.5px; }
+@media (max-width: 520px) { .board .pat { display: none; } }
+.sim-note { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.mini-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 960px) { .mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .mini-grid { grid-template-columns: 1fr; } }
+.mini { background: var(--raised); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 12px 6px; }
+.mini .mt { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.mini .mv { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.mini .mv b { color: var(--ink); }
+
+/* ---------- results ---------- */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+@media (max-width: 960px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } }
+.tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 16px; padding: 18px 18px 16px; }
+.tile .tl { font-size: 13.5px; color: var(--ink-2); line-height: 1.35; min-height: 2.7em; }
+.tile .tv { font-size: 46px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 8px; }
+.tile .tv small { font-size: 20px; font-weight: 500; color: var(--ink-2); letter-spacing: 0; }
+.tile .td { font-size: 13.5px; margin-top: 6px; color: var(--ink-2); }
+.tile .td b { color: var(--good); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chip { font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--ring); background: var(--surface); color: var(--ink-2); }
+
+/* ---------- use it ---------- */
+.use { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 22px; align-items: start; }
+@media (max-width: 960px) { .use { grid-template-columns: 1fr; } }
+pre.code {
+  margin: 0; background: var(--code-bg); border: 1px solid var(--ring); border-radius: 14px; padding: 18px 20px;
+  font-family: var(--font-mono); font-size: 13.5px; line-height: 1.65; overflow-x: auto; color: var(--ink);
+}
+.skill { margin-top: 26px; }
+.skill-head { display: flex; gap: 24px; align-items: start; justify-content: space-between; margin-bottom: 16px; }
+.skill-head p { max-width: 640px; margin: 4px 0 0; }
+.skill-name { font-family: var(--font-mono); font-size: 22px; font-weight: 500; margin: 0; }
+.skill-head .btn { flex: none; }
+@media (max-width: 760px) { .skill-head { flex-direction: column; } }
+pre.code .c { color: var(--muted); } pre.code .k { color: var(--cons); } pre.code .s { color: var(--ink-2); }
+.recipe { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.recipe li { display: grid; grid-template-columns: 112px 1fr; gap: 12px; font-size: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--ring); }
+.recipe li:last-child { border-bottom: 0; }
+.recipe .rk { font-weight: 600; }
+.recipe .rv { color: var(--ink-2); }
+.nots { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.nots span { font-size: 13px; padding: 4px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--ring); color: var(--ink-2); }
+.nots span::before { content: "✕ "; color: var(--muted); }
+
+/* ---------- bibtex / footer ---------- */
+.bib { position: relative; }
+.bib pre { margin: 0; background: var(--code-bg); border: 1px solid var(--ring); border-radius: 14px; padding: 18px 20px; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.6; overflow-x: auto; }
+.copy { position: absolute; top: 12px; right: 12px; height: 32px; padding: 0 12px; font-size: 13px; }
+footer { padding: 40px 0 60px; font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--ring); }
+footer p { margin: 0 0 6px; }
+</style>
+</head>
+<body>
+<nav class="nav" aria-label="Sections">
+  <div class="nav-in">
+    <a class="brand" href="#top">Consilience</a>
+    <div class="nav-links">
+      <a href="#trap">The trap</a>
+      <a href="#idea">The idea</a>
+      <a href="#playground" class="keep">Playground</a>
+      <a href="#results">Results</a>
+      <a href="#use">Use it</a>
+      <a href="#skill">Skill</a>
+      <a href="#case">Case study</a>
+      <a href="#cite">Cite</a>
+    </div>
+    <button class="theme-btn" id="theme-btn" type="button" aria-label="Toggle dark mode">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+</nav>
+
+<main id="top">
+<!-- ================= HERO ================= -->
+<header class="hero wrap">
+  <div class="eyebrow"><span class="pill on">NeurIPS 2026</span><span>AWS AI Labs</span></div>
+  <h1>Consilience</h1>
+  <p class="subtitle">for Verifier-Free Test-Time Scaling</p>
+  <p class="thesis">Good answers explore before they converge.</p>
+  <p class="lede">Consilience picks the sampled reasoning trace that starts <b>uncertain</b> and ends <b>certain</b>, from token log-probs alone.</p>
+  <div class="nots"><span>No verifier</span><span>No voting</span><span>No training</span></div>
+  <p class="authors"><b>Lecheng Kong</b> · <b>Like Hui</b> · <b>Haitao Mao</b> · <b>Jun Huan</b> &nbsp;—&nbsp; AWS AI Labs</p>
+  <div class="btns">
+    <!-- TODO: point to the camera-ready PDF / arXiv once public -->
+    <a class="btn primary" href="#" id="paper-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>Paper</a>
+    <a class="btn" href="#use"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>Use consilience</a>
+    <a class="btn" href="#cite">BibTeX</a>
+  </div>
+</header>
+
+<!-- ================= THE TRAP ================= -->
+<section class="wrap" id="trap">
+  <div class="kicker">The long-tail trap</div>
+  <h2>Confidence works, until the problems get hard.</h2>
+  <p class="section-lede">On hard problems the most confident answers are the wrong ones, and confidence-based selectors pick exactly those.</p>
+  <div class="card">
+    <div class="fig-head">
+      <div class="seg" role="group" aria-label="Histogram view" id="hist-tabs">
+        <button type="button" data-k="all_mean" aria-pressed="true"><span class="n">1</span>All problems · mean confidence</button>
+        <button type="button" data-k="hard_mean" aria-pressed="false"><span class="n">2</span>Hard problems · mean confidence</button>
+        <button type="button" data-k="hard_cons" aria-pressed="false"><span class="n">3</span>Hard problems · consilience</button>
+      </div>
+      <div class="fig-sub">GPT-OSS-120B · LiveCodeBench v6</div>
+    </div>
+    <div class="hist-verdict" id="hist-verdict" aria-live="polite"></div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="key-rect" style="background: var(--cons)"></i>Correct completions</span>
+      <span><i class="key-rect" style="background: var(--over)"></i>Incorrect completions</span>
+    </div>
+    <div class="chart" id="hist-chart" tabindex="0" role="img" aria-label="Overlaid histograms of correct and incorrect completions"></div>
+    <p class="caption" id="hist-caption"></p>
+    <details class="tv"><summary>Data table</summary><div class="tv-scroll" id="hist-table"></div></details>
+  </div>
+</section>
+
+<!-- ================= THE IDEA ================= -->
+<section class="wrap" id="idea">
+  <div class="kicker">The idea</div>
+  <h2>Not <i>how</i> confident. <i>When</i>.</h2>
+  <div class="read">
+    <p class="section-lede" style="margin-bottom: 18px"><b>Late confidence</b> means the reasoning converged. <b>Early confidence</b> means the model committed before exploring.</p>
+    <p>A model that sees several routes splits its probability between them, so good reasoning starts uncertain and ends certain. That is <b>consilience</b>: a conclusion is trustworthy when several lines of reasoning arrive at it.</p>
+  </div>
+
+  <div class="quad" style="margin-top: 30px" id="quad">
+    <div></div>
+    <div class="hdr">Ends confident</div>
+    <div class="hdr">Ends uncertain</div>
+
+    <div class="rh">Starts<br>confident</div>
+    <div class="qcell" data-shape="hh">
+      <span class="qtag"><i style="background: var(--over)"></i>Mean-confidence favours</span>
+      <div class="qaxis">Starts confident · ends confident</div>
+      <h3>Premature convergence</h3>
+      <svg class="spark" aria-hidden="true"></svg>
+      <p>Commits instantly. Confidently wrong on hard problems.</p>
+    </div>
+    <div class="qcell" data-shape="hl">
+      <div class="qaxis">Starts confident · ends uncertain</div>
+      <h3>Degeneration</h3>
+      <svg class="spark" aria-hidden="true"></svg>
+      <p>Starts sure, then breaks down.</p>
+    </div>
+
+    <div class="rh">Starts<br>uncertain</div>
+    <div class="qcell star" data-shape="lh">
+      <span class="qtag"><i style="background: var(--cons)"></i>Consilience targets</span>
+      <div class="qaxis">Starts uncertain · ends confident</div>
+      <h3>Consilience</h3>
+      <svg class="spark" aria-hidden="true"></svg>
+      <p>Explores, then converges. The trace to pick.</p>
+    </div>
+    <div class="qcell" data-shape="ll">
+      <div class="qaxis">Starts uncertain · ends uncertain</div>
+      <h3>Total confusion</h3>
+      <svg class="spark" aria-hidden="true"></svg>
+      <p>Never finds a path.</p>
+    </div>
+  </div>
+  <p class="caption" style="margin-top: 10px">Sketches. Grey ticks mark the scoring windows.</p>
+
+  <div class="formula-wrap">
+    <div>
+      <div class="kicker">The score</div>
+      <div class="formula" aria-label="S equals C final minus alpha times C initial"><i>S</i> = <i>C</i><sub>final</sub> − <span class="a">α</span>·<i>C</i><sub>initial</sub></div>
+      <p class="ink2" style="margin-top: 14px; max-width: 520px">Reward certainty earned at the end. Penalise certainty claimed at the start. Keep the highest-scoring trace.</p>
+    </div>
+    <div class="defs">
+      <div><span class="sym">c<sub>t</sub></span><span>Token confidence: <span class="math">−</span>mean of the top-5 log-probs. High when the alternatives are ruled out.</span></div>
+      <div><span class="sym">C<sub>initial</sub></span><span>Mean <span class="math">c<sub>t</sub></span> over the first 20% of reasoning, after skipping 5%.</span></div>
+      <div><span class="sym">C<sub>final</sub></span><span>Mean <span class="math">c<sub>t</sub></span> over the last 20% of reasoning.</span></div>
+      <div><span class="sym"><span class="greek">α</span></span><span>Penalty weight. Default 3; anything in 2–5 works.</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 34px">
+    <div class="fig-head">
+      <div>
+        <div class="fig-title">Measured: correct traces gain confidence as they go</div>
+        <div class="fig-sub">Correct minus incorrect confidence along the trace (normalised), hard problems, mean ± SEM. Own y-scale per panel.</div>
+      </div>
+    </div>
+    <div class="mini-grid" id="cd-grid"></div>
+    <p class="caption">The gap rises in every setting. On hard problems consilience separates correct from wrong (AUROC 0.61–0.62); mean confidence cannot (0.47–0.50).</p>
+    <details class="tv"><summary>Data table</summary><div class="tv-scroll" id="cd-table"></div></details>
+  </div>
+</section>
+
+<!-- ================= PLAYGROUND ================= -->
+<section class="wrap" id="playground">
+  <div class="kicker">Playground</div>
+  <h2>Turn the knob yourself.</h2>
+  <p class="section-lede">α = 0 picks the trace that jumped to an answer. A moderate α picks the one that explored. Too large an α picks one that never converged.</p>
+  <div class="play">
+    <div class="card">
+      <div class="fig-head">
+        <div class="fig-title">Confidence of each trace in the pool</div>
+        <div class="fig-sub">simulated, for intuition</div>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="key-line" style="border-color: var(--over)"></i>Mean-confidence pick</span>
+        <span><i class="key-line" style="border-color: var(--cons)"></i>Consilience pick</span>
+        <span><i class="key-line" style="border-color: var(--base); border-top-width: 1.5px"></i>Other traces</span>
+      </div>
+      <div class="chart" id="pool-chart" tabindex="0" role="img" aria-label="Eight simulated confidence trajectories with the initial and final scoring windows shaded"></div>
+      <p class="sim-note">Simulated traces. Shaded: skipped prefix, then the <span class="math">C<sub>initial</sub></span> and <span class="math">C<sub>final</sub></span> windows.</p>
+    </div>
+    <div class="card">
+      <div class="controls">
+        <div class="ctrl">
+          <label for="alpha">Penalty on early confidence, α <output id="alpha-out">3.0</output></label>
+          <input type="range" id="alpha" min="0" max="8" step="0.1" value="3">
+          <div class="hint">0 = last-window confidence only · 2–5 recommended</div>
+        </div>
+        <div class="ctrl">
+          <label for="win">Window size <output id="win-out">20%</output></label>
+          <input type="range" id="win" min="5" max="40" step="1" value="20">
+        </div>
+      </div>
+      <div class="picks" id="picks" aria-live="polite"></div>
+      <table class="board" id="board" aria-label="Ranking of the pool under the consilience score"></table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 18px">
+    <div class="fig-head">
+      <div>
+        <div class="fig-title">The same knob on real benchmarks</div>
+        <div class="fig-sub">Best-of-64 accuracy vs α. Grey line: pass@1 (random pick). The slider above moves the cursor.</div>
+      </div>
+    </div>
+    <div class="mini-grid" id="alpha-grid"></div>
+    <p class="caption">α = 0 often lands below random. The default α = 3 beats it in every setting.</p>
+    <details class="tv"><summary>Data table</summary><div class="tv-scroll" id="alpha-table"></div></details>
+  </div>
+</section>
+
+<!-- ================= RESULTS ================= -->
+<section class="wrap" id="results">
+  <div class="kicker">Results</div>
+  <h2>Gains where verifiers and voting can't help.</h2>
+  <p class="section-lede">Code and agent actions have nothing to vote on and no cheap verifier. Consilience still works.</p>
+  <div class="tiles">
+    <div class="tile"><div class="tl">LiveCodeBench v6<br>GPT-OSS-120B</div><div class="tv">69.7<small>%</small></div><div class="td"><b>+4.0</b> over pass@1 (65.7%), best of 64</div></div>
+    <div class="tile"><div class="tl">HMMT 2025<br>GPT-OSS-20B</div><div class="tv">80.7<small>%</small></div><div class="td"><b>+4.2</b> over pass@1 (76.5%); mean confidence falls to 68.0%</div></div>
+    <div class="tile"><div class="tl">SWE-bench Verified<br>GPT-OSS-120B · mini-SWE-agent</div><div class="tv">26.9<small>%</small></div><div class="td"><b>+3.9</b> over the plain agent (23.0%)</div></div>
+    <div class="tile"><div class="tl">LiveCodeBench, medium tier<br>GPT-OSS-120B</div><div class="tv">88.6<small>%</small></div><div class="td"><b>+13.7</b> over mean-confidence selection (74.9%)</div></div>
+  </div>
+
+  <div class="card">
+    <div class="fig-head">
+      <div>
+        <div class="fig-title">As n grows, confidence maximisers fall below random. Consilience doesn't.</div>
+        <div class="fig-sub">Selection accuracy vs. number of samples n.</div>
+      </div>
+    </div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="key-line" style="border-color: var(--cons)"></i>Consilience</span>
+      <span><i class="key-line" style="border-color: var(--over)"></i>Mean confidence (Self-Certainty)</span>
+      <span><i class="key-line" style="border-color: var(--last)"></i>Last-20% confidence (DeepConf)</span>
+      <span><i class="key-line" style="border-color: var(--base); border-top-width: 1.5px"></i>pass@1 (random pick)</span>
+    </div>
+    <div class="mini-grid" id="scale-grid"></div>
+    <p class="caption">Every extra sample is another chance to draw a confidently wrong outlier.</p>
+    <details class="tv"><summary>Data table</summary><div class="tv-scroll" id="scale-table"></div></details>
+  </div>
+  <div class="chips" aria-label="Evaluated models and benchmarks">
+    <span class="chip">GPT-OSS-120B</span><span class="chip">GPT-OSS-20B</span><span class="chip">Qwen3-80B</span><span class="chip">Qwen3-Coder-Next</span><span class="chip">DeepSeek-R1-Distill-7B</span>
+    <span class="chip">LiveCodeBench v6</span><span class="chip">HMMT 2025</span><span class="chip">GPQA Diamond</span><span class="chip">SWE-bench Verified</span>
+  </div>
+</section>
+
+<!-- ================= USE IT ================= -->
+<section class="wrap" id="use">
+  <div class="kicker">Use it</div>
+  <h2>A few lines on top of the logprobs you already have.</h2>
+  <p class="section-lede">Needs only the top-5 log-probs of the reasoning tokens. Scoring is free.</p>
+  <div class="use">
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+
+<span class="k">def</span> consilience(topk_logprobs, alpha=<span class="s">3.0</span>, window=<span class="s">0.2</span>, skip=<span class="s">0.05</span>):
+    <span class="c"># topk_logprobs: [L, K] top-K log-probs of the reasoning tokens (K = 5)</span>
+    c = -np.asarray(topk_logprobs).mean(axis=<span class="s">1</span>)    <span class="c"># token confidence</span>
+    L = len(c)
+    p, w = int(skip * L), max(<span class="s">1</span>, int(window * L))
+    <span class="k">return</span> c[-w:].mean() - alpha * c[p:p + w].mean()
+
+<span class="c"># best-of-n: score each sample's reasoning, keep the argmax</span>
+best = max(samples, key=<span class="k">lambda</span> s: consilience(s.reasoning_logprobs))</pre>
+    <div>
+      <ul class="recipe">
+        <li><span class="rk">α</span><span class="rv">3 (2–5 is safe)</span></li>
+        <li><span class="rk">Window</span><span class="rv">20–30%, or 2,048 tokens</span></li>
+        <li><span class="rk">Skip</span><span class="rv">First 5%</span></li>
+        <li><span class="rk">Scope</span><span class="rv">Reasoning tokens only (before <code>&lt;/think&gt;</code> or GPT-OSS's final channel)</span></li>
+        <li><span class="rk">Agents</span><span class="rv">Score only high-value steps. SWE-bench: 18 h vs 8 h, not 32×.</span></li>
+      </ul>
+      <div class="nots"><span>verifier</span><span>reward model</span><span>majority vote</span><span>training</span><span>extra forward passes</span></div>
+    </div>
+  </div>
+
+  <div class="card skill" id="skill">
+    <div class="skill-head">
+      <div>
+        <div class="kicker">Or let your agent do it</div>
+        <h3 class="skill-name">consilify</h3>
+        <p class="ink2">A Claude Code skill that adds consilience to any LLM system, single-turn or agentic, on any provider. It checks the model exposes top-K log-probs, finds the generation call, wraps it without changing its interface, and verifies the scorer against known-answer tests. It asks you when a choice is yours to make.</p>
+      </div>
+      <a class="btn primary" href="skill/consilify.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download consilify.zip</a>
+    </div>
+<pre class="code"><span class="c"># install for Claude Code</span>
+curl -LO https://consilience-tts.github.io/skill/consilify.zip
+unzip consilify.zip -d ~/.claude/skills/
+
+<span class="c"># then, inside your project</span>
+claude "consilify this agent"</pre>
+    <p class="caption">Read it first: <a href="https://github.com/consilience-tts/consilience-tts.github.io/blob/main/skill/consilify/SKILL.md">SKILL.md</a> (the method, defaults, <code>CONSILIENCE_*</code> settings and integration steps) and <a href="https://github.com/consilience-tts/consilience-tts.github.io/blob/main/skill/consilify/reference.py">reference.py</a> (reference scorer with known-answer tests).</p>
+  </div>
+</section>
+
+<!-- ================= CASE STUDY ================= -->
+<section class="wrap" id="case">
+  <div class="kicker">Case study</div>
+  <h2>The confident trace is wrong.</h2>
+  <p class="section-lede">Same model, same hard problem: Qwen3-80B on a LiveCodeBench tree problem that 4 of 128 samples solve. One trace commits early; the other keeps exploring.</p>
+  <div class="card">
+    <div class="fig-head">
+      <div>
+        <div class="fig-title">Confidence over the first 2,048 reasoning tokens</div>
+        <div class="fig-sub">Click a numbered marker or excerpt to link the two.</div>
+      </div>
+    </div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="key-line" style="border-color: var(--over)"></i>Picked by mean confidence</span>
+      <span><i class="key-line" style="border-color: var(--cons)"></i>Picked by consilience</span>
+    </div>
+    <div class="chart" id="case-chart" tabindex="0" role="img" aria-label="Line chart of per-token confidence for two traces. The mean-confidence pick stays high, between 10 and 15, for most of the first 2048 tokens. The consilience pick stays low, around 4 to 7, after the first 500 tokens."></div>
+    <details class="tv"><summary>Data table</summary><div class="tv-scroll" id="case-table"></div></details>
+
+    <div class="case-grid">
+      <article class="trace-card" aria-label="Mean-confidence pick">
+        <header>
+          <span class="who"><i class="key-line" style="border-color: var(--over)"></i>Mean-confidence pick</span>
+          <span class="verdict no">✗ Wrong</span>
+          <span class="stat-inline">initial confidence <b>11.27</b></span>
+        </header>
+        <div class="moment over" data-m="0" tabindex="0">
+          <div class="mhead"><span class="badge over">1</span>Token ~245: settles on a framing</div>
+          <blockquote>…When visiting a node: If its value is already in the path, <mark>we cannot extend further</mark> (since values must be unique). Otherwise, we can extend the path…</blockquote>
+          <p>Never revisited. It becomes a <code>return</code> that prunes valid subtrees.</p>
+        </div>
+        <div class="moment over" data-m="1" tabindex="0">
+          <div class="mhead"><span class="badge over">2</span>Token ~766: starts writing code</div>
+          <blockquote>## Implementation
+```python
+class Solution:
+    def longestSpecialPath(self, edges, nums):</blockquote>
+          <p>Commits early, stays confident, fails the tests.</p>
+        </div>
+      </article>
+      <article class="trace-card" aria-label="Consilience pick">
+        <header>
+          <span class="who"><i class="key-line" style="border-color: var(--cons)"></i>Consilience pick</span>
+          <span class="verdict ok">✓ Correct</span>
+          <span class="stat-inline">initial confidence <b>5.56</b></span>
+        </header>
+        <div class="moment cons" data-m="2" tabindex="0">
+          <div class="mhead"><span class="badge cons">3</span>Token ~1,989: still questioning the framing, and finds the key</div>
+          <blockquote>…we cannot have any path from any ancestor before the previous occurrence of this value to u… But we can have paths from ancestors after the previous occurrence of nums[u] to u.
+
+<mark>Wait, that's key!</mark>
+
+…So the only valid paths ending at u are those that start from an ancestor after the last occurrence of nums[u]…</blockquote>
+          <p>Still exploring at token 2,000. Low confidence here is the model <b>keeping alternatives alive</b>.</p>
+        </div>
+      </article>
+    </div>
+    <details class="problem">
+      <summary>The problem (LiveCodeBench #3, pass@1 = 0.03)</summary>
+      <p>Given an undirected tree rooted at node 0 with <i>n</i> nodes, where each node has a value <code>nums[i]</code> and each edge has an integer length. A <i>special path</i> is a downward path (ancestor → descendant) in which all node values are distinct. Return <code>[max_length, min_nodes]</code>: the length of the longest special path, and the minimum number of nodes among all such longest paths. (<i>n</i> ≤ 5·10⁴, <code>nums[i]</code> ≤ 5·10⁴.)</p>
+    </details>
+  </div>
+</section>
+
+<!-- ================= CITE ================= -->
+<section class="wrap" id="cite">
+  <div class="kicker">Cite</div>
+  <h2>BibTeX</h2>
+  <div class="bib">
+<pre id="bibtex">@inproceedings{kong2026consilience,
+  title     = {Consilience for Verifier-Free Test-Time Scaling},
+  author    = {Kong, Lecheng and Hui, Like and Mao, Haitao and Huan, Jun},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}</pre>
+    <button class="btn copy" type="button" id="copy-bib">Copy</button>
+  </div>
+</section>
+</main>
+
+<footer class="wrap">
+  <p>Charts on this page are re-plotted from data extracted from the paper's figures. The playground pool is simulated for illustration.</p>
+  <p>Lecheng Kong, Like Hui, Haitao Mao, Jun Huan · AWS AI Labs</p>
+</footer>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script src="static/data.js"></script>
+<script>
+(() => {
+'use strict';
+const D = window.DATA;
+const NS = 'http://www.w3.org/2000/svg';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- theme ---------- */
+const root = document.documentElement;
+const saved = localStorage.getItem('cons-theme');
+if (saved) root.dataset.theme = saved;
+document.getElementById('theme-btn').addEventListener('click', () => {
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+  localStorage.setItem('cons-theme', root.dataset.theme);
+});
+
+/* ---------- small helpers ---------- */
+function S(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function H(tag, attrs, text, parent) {
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function text(parent, x, y, str, cls, anchor) {
+  const t = S('text', { x, y, class: cls || 'tick' }, parent);
+  if (anchor) t.setAttribute('text-anchor', anchor);
+  t.textContent = str;
+  return t;
+}
+const lin = (d0, d1, r0, r1) => { const f = v => r0 + (v - d0) / (d1 - d0) * (r1 - r0); f.inv = p => d0 + (p - r0) / (r1 - r0) * (d1 - d0); return f; };
+function niceStep(span, n) {
+  const raw = span / Math.max(1, n), p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+  return (m < 1.5 ? 1 : m < 2.25 ? 2 : m < 3.5 ? 2.5 : m < 7.5 ? 5 : 10) * p;
+}
+function ticks(lo, hi, n) {
+  const st = niceStep(hi - lo, n), out = [];
+  for (let v = Math.ceil(lo / st - 1e-9) * st; v <= hi + 1e-9; v += st) out.push(+v.toFixed(10));
+  return out;
+}
+function dec(st) { return Math.max(0, -Math.floor(Math.log10(st) + 1e-9)); }
+const fmt = (v, d = 1) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+const pathD = pts => pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('');
+function interp(pts, x) {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) if (pts[i][0] >= x) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    return x1 === x0 ? y1 : y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+  }
+  return pts[pts.length - 1][1];
+}
+function onResize(el, draw) {
+  let w = 0;
+  new ResizeObserver(() => { const nw = Math.round(el.clientWidth); if (nw && nw !== w) { w = nw; draw(nw); } }).observe(el);
+}
+
+/* ---------- tooltip (values lead, labels follow; textContent only) ---------- */
+const tip = document.getElementById('tip');
+function showTip(cx, cy, title, rows) {
+  tip.replaceChildren();
+  H('div', { class: 't' }, title, tip);
+  for (const r of rows) {
+    const row = H('div', { class: 'r' }, null, tip);
+    if (r.color) { const k = H('i', null, null, row); k.style.borderColor = r.color; }
+    H('b', null, r.value, row);
+    H('span', null, r.label, row);
+  }
+  tip.classList.add('on');
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = cx + 14, y = cy - th - 12;
+  if (x + tw > innerWidth - 8) x = cx - tw - 14;
+  if (y < 64) y = cy + 16;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = y + 'px';
+}
+const hideTip = () => tip.classList.remove('on');
+
+/* Crosshair for line charts: snaps to the nearest x sample; works with pointer and arrow keys. */
+function crosshair(host, svg, m, w, h, xs, readout) {
+  const g = S('g', { 'pointer-events': 'none' }, svg);
+  const vl = S('line', { class: 'xhair', y1: m.t, y2: m.t + h, visibility: 'hidden' }, g);
+  const dots = S('g', null, g);
+  let idx = -1;
+  function show(i, cx, cy) {
+    idx = i;
+    const r = readout(i);
+    vl.setAttribute('x1', xs[i]); vl.setAttribute('x2', xs[i]); vl.setAttribute('visibility', 'visible');
+    dots.replaceChildren();
+    for (const d of r.dots) S('circle', { cx: xs[i], cy: d.y, r: 4, class: 'dot ' + d.cls }, dots);
+    const box = svg.getBoundingClientRect();
+    showTip(cx ?? box.left + xs[i], cy ?? box.top + Math.min(...r.dots.map(d => d.y)), r.title, r.rows);
+  }
+  function hide() { vl.setAttribute('visibility', 'hidden'); dots.replaceChildren(); hideTip(); }
+  const hit = S('rect', { x: m.l, y: m.t, width: w, height: h, fill: 'transparent' }, svg);
+  hit.addEventListener('pointermove', e => {
+    const box = svg.getBoundingClientRect(), px = e.clientX - box.left;
+    let best = 0; for (let i = 1; i < xs.length; i++) if (Math.abs(xs[i] - px) < Math.abs(xs[best] - px)) best = i;
+    show(best, e.clientX, e.clientY);
+  });
+  hit.addEventListener('pointerleave', hide);
+  host.onkeydown = e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const step = Math.max(1, Math.round(xs.length / 40));
+      show(Math.min(xs.length - 1, Math.max(0, (idx < 0 ? 0 : idx) + (e.key === 'ArrowRight' ? step : -step))));
+    } else if (e.key === 'Escape') hide();
+  };
+  host.onblur = hide;
+}
+
+function axes(svg, m, w, h, x, y, xt, yt, opt = {}) {
+  const g = S('g', null, svg);
+  const yd = opt.yDec ?? dec(yt.length > 1 ? yt[1] - yt[0] : 1);
+  for (const v of yt) {
+    const py = Math.round(y(v)) + 0.5;
+    S('line', { class: 'gridline', x1: m.l, x2: m.l + w, y1: py, y2: py }, g);
+    text(g, m.l - 8, py + 4, opt.yFmt ? opt.yFmt(v) : fmt(v, yd), 'tick', 'end');
+  }
+  S('line', { class: 'baseline', x1: m.l, x2: m.l + w, y1: m.t + h + 0.5, y2: m.t + h + 0.5 }, g);
+  for (const v of xt) text(g, x(v), m.t + h + 17, opt.xFmt ? opt.xFmt(v) : String(v), 'tick', 'middle');
+  if (opt.xLabel) text(g, m.l + w / 2, m.t + h + 36, opt.xLabel, 'axis-label', 'middle');
+  if (opt.yLabel) { const t = text(g, 0, 0, opt.yLabel, 'axis-label', 'middle'); t.setAttribute('transform', `translate(${m.l - 38},${m.t + h / 2}) rotate(-90)`); }
+  return g;
+}
+function table(host, head, rows) {
+  const t = H('table'), tr = H('tr', null, null, H('thead', null, null, t));
+  for (const c of head) H('th', null, c, tr);
+  const tb = H('tbody', null, null, t);
+  for (const r of rows) { const row = H('tr', null, null, tb); for (const c of r) H('td', null, c, row); }
+  host.replaceChildren(t);
+}
+const css = v => getComputedStyle(root).getPropertyValue(v).trim();
+
+/* =========================================================
+   1. Case study (hook)
+   ========================================================= */
+(function caseStudy() {
+  const host = document.getElementById('case-chart');
+  const C = D.case, n = C.cons.length, tok = i => i * C.step;
+  const cons = C.cons.map((v, i) => [tok(i), v]), over = C.mean.map((v, i) => [tok(i), v]);
+  const markers = [
+    { t: 245, who: 'over', n: 1, line: over }, { t: 766, who: 'over', n: 2, line: over }, { t: 1989, who: 'cons', n: 3, line: cons },
+  ];
+  const moments = [...document.querySelectorAll('.moment')];
+  let active = 2, drawn = false;
+  function setActive(i) {
+    active = i;
+    moments.forEach((el, j) => el.classList.toggle('active', j === i));
+    host.querySelectorAll('[data-mk]').forEach(el => el.setAttribute('opacity', +el.dataset.mk === i ? 1 : 0.45));
+  }
+  moments.forEach((el, j) => {
+    el.addEventListener('click', () => setActive(j));
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActive(j); } });
+  });
+  function draw(W) {
+    host.replaceChildren();
+    const narrow = W < 600;
+    const m = { t: 34, r: 12, b: 44, l: 46 }, w = W - m.l - m.r, h = narrow ? 230 : 320;
+    const svg = S('svg', { viewBox: `0 0 ${W} ${h + m.t + m.b}`, height: h + m.t + m.b }, host);
+    const x = lin(0, 2048, m.l, m.l + w), y = lin(2, 16, m.t + h, m.t);
+    axes(svg, m, w, h, x, y, narrow ? [0, 500, 1000, 1500, 2000] : [0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000], [4, 6, 8, 10, 12, 14],
+      { xLabel: 'Reasoning token', yLabel: 'Confidence', xFmt: v => v.toLocaleString('en-US') });
+    // markers
+    markers.forEach((mk, i) => {
+      const g = S('g', { 'data-mk': i, cursor: 'pointer', opacity: i === active ? 1 : 0.45 }, svg);
+      const px = x(mk.t);
+      S('line', { x1: px, x2: px, y1: m.t - 8, y2: m.t + h, class: 'ln-' + mk.who, 'stroke-width': 1.5, 'stroke-opacity': 0.55 }, g);
+      S('circle', { cx: px, cy: m.t - 16, r: 10, class: 'fill-' + mk.who }, g);
+      const t = text(g, px, m.t - 12, String(mk.n), 'label', 'middle'); t.style.fill = '#fff'; t.style.fontSize = '11.5px';
+      g.addEventListener('click', () => { setActive(i); moments[i].scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' }); });
+    });
+    const pO = S('path', { d: pathD(over.map(p => [x(p[0]), y(p[1])])), class: 'ln ln-over' }, svg);
+    const pC = S('path', { d: pathD(cons.map(p => [x(p[0]), y(p[1])])), class: 'ln ln-cons' }, svg);
+    // selective direct labels
+    if (!narrow) {
+      text(svg, x(1290), y(15.6), 'Mean-confidence pick: certain early, wrong', 'label halo', 'middle');
+      text(svg, x(1130), y(3.0), 'Consilience pick: still exploring, correct', 'label halo', 'middle');
+    }
+    if (!drawn && !reduceMotion) {
+      drawn = true;
+      for (const p of [pO, pC]) {
+        const L = p.getTotalLength();
+        p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+        p.getBoundingClientRect();
+        p.style.transition = 'stroke-dashoffset 2.4s cubic-bezier(.3,.1,.2,1)';
+      }
+      let done = false;
+      const reveal = () => {
+        if (done) return; done = true;
+        removeEventListener('scroll', check); removeEventListener('resize', check); io.disconnect();
+        for (const p of host.querySelectorAll('path.ln')) {
+          p.style.strokeDashoffset = 0;
+          setTimeout(() => { p.style.transition = ''; p.style.strokeDasharray = ''; p.style.strokeDashoffset = ''; }, 2600);
+        }
+      };
+      const check = () => { const r = host.getBoundingClientRect(); if (r.top < innerHeight * 0.8 && r.bottom > 0) reveal(); };
+      addEventListener('scroll', check, { passive: true }); addEventListener('resize', check);
+      addEventListener('beforeprint', reveal);
+      const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) reveal(); }, { threshold: 0.3 });
+      io.observe(host);
+      requestAnimationFrame(check);
+    }
+    const xs = cons.map(p => x(p[0]));
+    crosshair(host, svg, m, w, h, xs, i => ({
+      title: 'Token ' + tok(i).toLocaleString('en-US'),
+      dots: [{ y: y(over[i][1]), cls: 'fill-over' }, { y: y(cons[i][1]), cls: 'fill-cons' }],
+      rows: [{ color: css('--over'), value: over[i][1].toFixed(1), label: 'mean-confidence pick' },
+             { color: css('--cons'), value: cons[i][1].toFixed(1), label: 'consilience pick' }],
+    }));
+    // keep markers clickable above the hover layer
+    svg.querySelectorAll('[data-mk]').forEach(g => svg.appendChild(g));
+  }
+  onResize(host, draw);
+  setActive(2);
+  const rows = [];
+  for (let i = 0; i < n; i += 32) rows.push([tok(i).toLocaleString('en-US'), C.mean[i].toFixed(2), C.cons[i].toFixed(2)]);
+  table(document.getElementById('case-table'), ['Token', 'Mean-confidence pick', 'Consilience pick'], rows);
+})();
+
+/* =========================================================
+   2. Long-tail trap histograms
+   ========================================================= */
+(function trap() {
+  const host = document.getElementById('hist-chart');
+  const verdict = document.getElementById('hist-verdict'), cap = document.getElementById('hist-caption');
+  const META = {
+    all_mean: { x: 'Mean confidence of the completion', ok: true,
+      verdict: ['Most confident → more likely correct', '✓'],
+      cap: 'All problems: correct completions are more confident (μ 10.83 vs 9.12). This is what confidence-based selection relies on.' },
+    hard_mean: { x: 'Mean confidence of the completion', ok: false, tail: [11.55, 13.3],
+      verdict: ['Most confident → more likely wrong', '✗'],
+      cap: 'Hard problems (pass@1 < 20%): wrong completions are more confident (μ 9.03 vs 8.79) and own the top tail, which is where argmax picks.' },
+    hard_cons: { x: 'Consilience score S (α = 3)', ok: true,
+      verdict: ['Highest consilience → more likely correct', '✓'],
+      cap: 'Same hard problems, scored by consilience: correct completions lead again (μ −10.10 vs −11.68) and the wrong-answer tail is gone.' },
+  };
+  let key = 'all_mean';
+  const tabs = [...document.querySelectorAll('#hist-tabs button')];
+  tabs.forEach(b => b.addEventListener('click', () => { key = b.dataset.k; tabs.forEach(t => t.setAttribute('aria-pressed', t === b)); render(); }));
+  let W = 0;
+  function render() {
+    const Hd = D.hist[key], M = META[key];
+    verdict.replaceChildren();
+    H('span', { class: M.ok ? 'ok' : 'no' }, M.verdict[1] + ' ', verdict);
+    verdict.appendChild(document.createTextNode(M.verdict[0]));
+    cap.textContent = M.cap;
+    if (W) draw(W);
+    const rows = Hd.correct.map((c, i) => [`${fmt(Hd.lo + i * Hd.w, 2)} – ${fmt(Hd.lo + (i + 1) * Hd.w, 2)}`, c.toFixed(3), Hd.incorrect[i].toFixed(3)]);
+    table(document.getElementById('hist-table'), ['Bin', 'Correct (density)', 'Incorrect (density)'], rows);
+  }
+  function draw(width) {
+    W = width;
+    host.replaceChildren();
+    const Hd = D.hist[key], M = META[key], nb = Hd.correct.length, hi = Hd.lo + nb * Hd.w;
+    const m = { t: 44, r: 12, b: 46, l: 46 }, w = W - m.l - m.r, h = W < 600 ? 220 : 280;
+    const svg = S('svg', { viewBox: `0 0 ${W} ${h + m.t + m.b}`, height: h + m.t + m.b }, host);
+    const ymax = Math.max(...Hd.correct, ...Hd.incorrect) * 1.08;
+    const x = lin(Hd.lo, hi, m.l, m.l + w), y = lin(0, ymax, m.t + h, m.t);
+    const xt = ticks(Hd.lo, hi, W < 600 ? 5 : 8), yt = ticks(0, ymax, 4);
+    if (M.tail) {
+      const [a, b] = M.tail;
+      S('rect', { x: x(a), y: m.t, width: x(b) - x(a), height: h, class: 'wash-over', rx: 6 }, svg);
+      text(svg, (x(a) + x(b)) / 2, m.t + 18, 'confidently wrong tail', 'label-2', 'middle');
+    }
+    axes(svg, m, w, h, x, y, xt, yt, { xLabel: M.x, yLabel: 'Density', xFmt: v => fmt(v, dec(xt[1] - xt[0])), yFmt: v => v.toFixed(dec(yt[1] - yt[0])) });
+    for (const [cls, arr] of [['over', Hd.incorrect], ['cons', Hd.correct]]) {
+      const pts = [[x(Hd.lo), y(0)]];
+      arr.forEach((d, i) => { pts.push([x(Hd.lo + i * Hd.w), y(d)], [x(Hd.lo + (i + 1) * Hd.w), y(d)]); });
+      pts.push([x(hi), y(0)]);
+      S('path', { d: pathD(pts) + 'Z', class: 'wash-' + cls }, svg);
+      S('path', { d: pathD(pts), class: 'ln ln-' + cls, 'stroke-width': 1.75 }, svg);
+    }
+    // means: lower mean labelled to its left, higher to its right
+    const mus = [['cons', Hd.mu_correct, 'correct'], ['over', Hd.mu_incorrect, 'incorrect']].sort((a, b) => a[1] - b[1]);
+    mus.forEach(([cls, mu, nm], j) => {
+      const px = x(mu);
+      S('line', { x1: px, x2: px, y1: m.t - 18, y2: m.t + h, class: 'ln-' + cls, 'stroke-width': 2 }, svg);
+      S('circle', { cx: px, cy: m.t - 18, r: 4, class: 'dot fill-' + cls }, svg);
+      text(svg, px + (j ? 9 : -9), m.t - 14, `μ ${nm} ${fmt(mu, 2)}`, 'label', j ? 'start' : 'end');
+    });
+    // per-bin hover
+    const box = () => svg.getBoundingClientRect();
+    const hl = S('rect', { y: m.t, height: h, width: Math.max(1, x(Hd.lo + Hd.w) - x(Hd.lo)), fill: 'var(--hover)', visibility: 'hidden', 'pointer-events': 'none' }, svg);
+    let cur = -1;
+    function show(i, cx, cy) {
+      cur = i;
+      hl.setAttribute('x', x(Hd.lo + i * Hd.w)); hl.setAttribute('visibility', 'visible');
+      const b = box();
+      showTip(cx ?? b.left + x(Hd.lo + (i + 0.5) * Hd.w), cy ?? b.top + m.t + 40, `${M.x.split(' (')[0]} ${fmt(Hd.lo + i * Hd.w, 2)} – ${fmt(Hd.lo + (i + 1) * Hd.w, 2)}`, [
+        { color: css('--cons'), value: Hd.correct[i].toFixed(3), label: 'correct' },
+        { color: css('--over'), value: Hd.incorrect[i].toFixed(3), label: 'incorrect' }]);
+    }
+    const hit = S('rect', { x: m.l, y: m.t, width: w, height: h, fill: 'transparent' }, svg);
+    hit.addEventListener('pointermove', e => { const i = Math.floor((x.inv(e.clientX - box().left) - Hd.lo) / Hd.w); if (i >= 0 && i < nb) show(i, e.clientX, e.clientY); });
+    hit.addEventListener('pointerleave', () => { hl.setAttribute('visibility', 'hidden'); hideTip(); });
+    host.onkeydown = e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); show(Math.min(nb - 1, Math.max(0, (cur < 0 ? 0 : cur) + (e.key === 'ArrowRight' ? 1 : -1)))); }
+      else if (e.key === 'Escape') { hl.setAttribute('visibility', 'hidden'); hideTip(); }
+    };
+    host.onblur = () => { hl.setAttribute('visibility', 'hidden'); hideTip(); };
+  }
+  onResize(host, draw);
+  render();
+})();
+
+/* =========================================================
+   3. Quadrant sparklines (schematic) + measured trajectories
+   ========================================================= */
+(function quadrant() {
+  const SHAPES = {
+    hh: [[0, .5], [.06, .86], [.3, .88], [.7, .9], [1, .94]],
+    hl: [[0, .5], [.06, .86], [.35, .86], [.7, .42], [1, .14]],
+    lh: [[0, .5], [.06, .24], [.22, .1], [.45, .22], [.78, .78], [1, .94]],
+    ll: [[0, .5], [.06, .2], [.3, .1], [.7, .2], [1, .16]],
+  };
+  const smooth = (kf, x) => { let j = 1; while (kf[j][0] < x) j++; const [x0, y0] = kf[j - 1], [x1, y1] = kf[j], u = (x - x0) / (x1 - x0 || 1); return y0 + (y1 - y0) * u * u * (3 - 2 * u); };
+  for (const cell of document.querySelectorAll('.qcell')) {
+    const svg = cell.querySelector('.spark'), kf = SHAPES[cell.dataset.shape], star = cell.classList.contains('star');
+    const Wd = 300, Ht = 84;
+    svg.setAttribute('viewBox', `0 0 ${Wd} ${Ht}`); svg.setAttribute('preserveAspectRatio', 'none');
+    S('rect', { x: Wd * .05, y: Ht - 3, width: Wd * .2, height: 3, class: 'fill-base', rx: 1.5, opacity: 0.5 }, svg);
+    S('rect', { x: Wd * .8, y: Ht - 3, width: Wd * .2, height: 3, class: 'fill-base', rx: 1.5, opacity: 0.5 }, svg);
+    const pts = []; for (let i = 0; i <= 60; i++) { const xx = i / 60; pts.push([xx * Wd, Ht - 10 - smooth(kf, xx) * (Ht - 16)]); }
+    const cls = cell.dataset.shape === 'hh' ? 'ln-over' : star ? 'ln-cons' : 'ln-base';
+    S('path', { d: pathD(pts), class: 'ln ' + cls, 'vector-effect': 'non-scaling-stroke', 'stroke-width': 2.25 }, svg);
+  }
+
+  const grid = document.getElementById('cd-grid'), rowsAll = [];
+  D.confdiff.forEach(P => {
+    const card = H('div', { class: 'mini' }, null, grid);
+    H('div', { class: 'mt' }, P.name, card);
+    const host = H('div', { class: 'chart', tabindex: '0', role: 'img', 'aria-label': P.name + ': difference in confidence, correct minus incorrect, along the trace' }, null, card);
+    const lo = Math.min(...P.lo), hi = Math.max(...P.hi), pad = (hi - lo) * 0.08;
+    onResize(host, W => {
+      host.replaceChildren();
+      const m = { t: 10, r: 8, b: 34, l: 40 }, w = W - m.l - m.r, h = 130;
+      const svg = S('svg', { viewBox: `0 0 ${W} ${h + m.t + m.b}`, height: h + m.t + m.b }, host);
+      const x = lin(0, 1, m.l, m.l + w), y = lin(lo - pad, hi + pad, m.t + h, m.t), yt = ticks(lo - pad, hi + pad, 3);
+      axes(svg, m, w, h, x, y, [0, 0.5, 1], yt, { xFmt: v => (v * 100) + '%', xLabel: 'position in trace', yFmt: v => fmt(v, dec(yt[1] - yt[0])) });
+      S('line', { x1: m.l, x2: m.l + w, y1: y(0), y2: y(0), stroke: 'var(--ink-2)', 'stroke-width': 1, 'stroke-opacity': 0.6 }, svg);
+      const band = P.x.map((v, i) => [x(v), y(P.hi[i])]).concat(P.x.map((v, i) => [x(v), y(P.lo[i])]).reverse());
+      S('path', { d: pathD(band) + 'Z', class: 'wash-cons' }, svg);
+      S('path', { d: pathD(P.x.map((v, i) => [x(v), y(P.mean[i])])), class: 'ln ln-cons' }, svg);
+      const xs = P.x.map(x);
+      crosshair(host, svg, m, w, h, xs, i => ({
+        title: `${P.name} · ${Math.round(P.x[i] * 100)}% into the trace`,
+        dots: [{ y: y(P.mean[i]), cls: 'fill-cons' }],
+        rows: [{ color: css('--cons'), value: fmt(P.mean[i], 3), label: `correct − incorrect (SEM band ${fmt(P.lo[i], 3)} to ${fmt(P.hi[i], 3)})` }],
+      }));
+    });
+    for (let i = 0; i < P.x.length; i += 20) rowsAll.push([P.name, Math.round(P.x[i] * 100) + '%', fmt(P.mean[i], 3), fmt(P.lo[i], 3), fmt(P.hi[i], 3)]);
+  });
+  table(document.getElementById('cd-table'), ['Setting', 'Position', 'Δ mean', 'Δ − SEM', 'Δ + SEM'], rowsAll);
+})();
+
+/* =========================================================
+   4. Playground: simulated pool + real alpha sweeps
+   ========================================================= */
+(function playground() {
+  // Synthetic pool. Keyframes give the shape; seeded smooth noise keeps it from looking drawn.
+  const POOL = [
+    { id: 'A', pat: 'Jumps to an answer', ok: false, kf: [[0, 9], [.05, 11.6], [.3, 11.8], [.6, 12.2], [1, 12.6]] },
+    { id: 'B', pat: 'Jumps to an answer', ok: false, kf: [[0, 9], [.05, 10.6], [.4, 11.2], [1, 12.1]] },
+    { id: 'C', pat: 'Explores, then converges', ok: true, kf: [[0, 9], [.05, 7.2], [.15, 6.2], [.35, 6.8], [.6, 9], [.85, 11.8], [1, 12.4]] },
+    { id: 'D', pat: 'Explores, then converges', ok: true, kf: [[0, 9], [.05, 7.8], [.2, 7.0], [.5, 8.8], [.8, 11.2], [1, 11.8]] },
+    { id: 'E', pat: 'Starts sure, falls apart', ok: false, kf: [[0, 9], [.05, 10.8], [.3, 11], [.6, 9], [1, 7]] },
+    { id: 'F', pat: 'Lost throughout', ok: false, kf: [[0, 9], [.05, 6.4], [.2, 5.8], [.6, 6.5], [1, 7.2]] },
+    { id: 'G', pat: 'Lukewarm', ok: false, kf: [[0, 9], [.05, 9.2], [.4, 9.0], [1, 10.2]] },
+    { id: 'H', pat: 'Lost throughout', ok: false, kf: [[0, 9], [.05, 5.8], [.25, 5.3], [.7, 5.6], [1, 6.1]] },
+  ];
+  const N = 200;
+  const rng = seed => { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; };
+  let seed = 7;
+  for (const T of POOL) {
+    const r = rng(seed += 13), kf = T.kf, c = []; let nz = 0;
+    for (let i = 0; i < N; i++) {
+      const xx = i / (N - 1); let j = 1; while (kf[j][0] < xx) j++;
+      const [x0, y0] = kf[j - 1], [x1, y1] = kf[j], u = (xx - x0) / (x1 - x0 || 1), sm = u * u * (3 - 2 * u);
+      nz = 0.85 * nz + 0.15 * (r() - 0.5) * 4;
+      c.push(y0 + (y1 - y0) * sm + nz * 0.6);
+    }
+    T.c = c; T.mean = c.reduce((a, b) => a + b, 0) / N;
+  }
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const aIn = document.getElementById('alpha'), wIn = document.getElementById('win');
+  const aOut = document.getElementById('alpha-out'), wOut = document.getElementById('win-out');
+  const picksEl = document.getElementById('picks'), board = document.getElementById('board');
+  const poolHost = document.getElementById('pool-chart');
+  let state = {}, poolW = 0, alphaCbs = [];
+
+  function compute() {
+    const alpha = +aIn.value, win = +wIn.value / 100;
+    const p = Math.floor(0.05 * N), Wn = Math.max(1, Math.floor(win * N));
+    for (const T of POOL) { T.ci = mean(T.c.slice(p, p + Wn)); T.cf = mean(T.c.slice(N - Wn)); T.s = T.cf - alpha * T.ci; }
+    const by = f => POOL.reduce((a, b) => (f(b) > f(a) ? b : a));
+    state = { alpha, win, p, Wn, cons: by(T => T.s), mean: by(T => T.mean), last: by(T => T.cf) };
+    aOut.textContent = alpha.toFixed(1); wOut.textContent = Math.round(win * 100) + '%';
+  }
+  function renderSide() {
+    picksEl.replaceChildren();
+    const rows = [
+      ['Mean confidence', 'Self-Certainty: whole-trace average', state.mean, css('--over')],
+      ['Last window only', `DeepConf-style, last ${Math.round(state.win * 100)}% (α = 0)`, state.last, css('--last')],
+      ['Consilience', `C_final − ${state.alpha.toFixed(1)} · C_initial`, state.cons, css('--cons')],
+    ];
+    for (const [nm, sub, T, col] of rows) {
+      const d = H('div', { class: 'pick' }, null, picksEl);
+      H('i', { class: 'k' }, null, d).style.borderColor = col;
+      const mid = H('div', null, null, d);
+      H('div', null, `${nm} → trace ${T.id}, “${T.pat.toLowerCase()}”`, mid);
+      H('div', { class: 'm' }, sub, mid);
+      H('div', { class: 'res ' + (T.ok ? 'ok' : 'no') }, T.ok ? '✓ correct' : '✗ wrong', d);
+    }
+    board.replaceChildren();
+    const hr = H('tr', null, null, H('thead', null, null, board));
+    for (const c of ['#', 'Trace', 'C_initial', 'C_final', 'S', '']) H('th', null, c, hr);
+    const tb = H('tbody', null, null, board);
+    [...POOL].sort((a, b) => b.s - a.s).forEach((T, i) => {
+      const tr = H('tr', { class: i === 0 ? 'top' : '' }, null, tb);
+      H('td', null, String(i + 1), tr);
+      const td = H('td', null, T.id + ' ', tr); H('span', { class: 'pat' }, T.pat, td);
+      H('td', null, T.ci.toFixed(1), tr); H('td', null, T.cf.toFixed(1), tr); H('td', null, fmt(T.s, 1), tr);
+      H('td', { class: T.ok ? 'ok' : 'no' }, T.ok ? '✓' : '✗', tr);
+    });
+  }
+  function drawPool(W) {
+    poolW = W;
+    poolHost.replaceChildren();
+    const m = { t: 22, r: 22, b: 44, l: 40 }, w = W - m.l - m.r, h = W < 600 ? 240 : 400;
+    const svg = S('svg', { viewBox: `0 0 ${W} ${h + m.t + m.b}`, height: h + m.t + m.b }, poolHost);
+    const x = lin(0, N - 1, m.l, m.l + w), y = lin(3.5, 14, m.t + h, m.t);
+    const bx = i => x(i), { p, Wn } = state;
+    S('rect', { x: bx(0), y: m.t, width: bx(p) - bx(0), height: h, class: 'wash-skip' }, svg);
+    S('rect', { x: bx(p), y: m.t, width: bx(p + Wn - 1) - bx(p), height: h, class: 'wash-win' }, svg);
+    S('rect', { x: bx(N - Wn), y: m.t, width: bx(N - 1) - bx(N - Wn), height: h, class: 'wash-win' }, svg);
+    text(svg, (bx(p) + bx(p + Wn - 1)) / 2, m.t - 7, 'C_initial (penalised)', 'label-2', 'middle');
+    text(svg, (bx(N - Wn) + bx(N - 1)) / 2, m.t - 7, 'C_final (rewarded)', 'label-2', 'middle');
+    if (bx(p) - bx(0) > 22) text(svg, (bx(0) + bx(p)) / 2, m.t + h - 6, 'skip', 'tick', 'middle');
+    axes(svg, m, w, h, x, y, [0, 49.75, 99.5, 149.25, 199], [4, 6, 8, 10, 12, 14],
+      { xFmt: v => Math.round(v / 1.99) + '%', xLabel: 'position in reasoning trace', yLabel: 'Confidence' });
+    const order = POOL.filter(T => T !== state.cons && T !== state.mean);
+    for (const T of order) S('path', { d: pathD(T.c.map((v, i) => [x(i), y(v)])), class: 'ln ln-base', 'stroke-opacity': 0.55 }, svg);
+    for (const [T, cls] of [[state.mean, 'over'], [state.cons, 'cons']]) {
+      S('path', { d: pathD(T.c.map((v, i) => [x(i), y(v)])), class: 'ln ln-' + cls, 'stroke-width': 2.5 }, svg);
+    }
+    // end labels for every trace (letters), nudged apart only if they'd overlap
+    const ends = POOL.map(T => ({ T, y: y(T.c[N - 1]) })).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 12) ends[i].y = ends[i - 1].y + 12;
+    for (const e of ends) {
+      const t = text(svg, m.l + w + 4, e.y + 4, e.T.id, 'label-2');
+      if (e.T === state.cons || e.T === state.mean) t.setAttribute('class', 'label');
+    }
+    const xs = POOL[0].c.map((_, i) => x(i));
+    crosshair(poolHost, svg, m, w, h, xs, i => ({
+      title: Math.round(i / (N - 1) * 100) + '% into the trace',
+      dots: [{ y: y(state.mean.c[i]), cls: 'fill-over' }, { y: y(state.cons.c[i]), cls: 'fill-cons' }],
+      rows: [state.mean, state.cons].concat(POOL.filter(T => T !== state.mean && T !== state.cons))
+        .map(T => ({ color: T === state.cons ? css('--cons') : T === state.mean ? css('--over') : css('--base'), value: T.c[i].toFixed(1), label: `trace ${T.id} · ${T.pat.toLowerCase()}` })),
+    }));
+  }
+  function update() { compute(); renderSide(); if (poolW) drawPool(poolW); for (const f of alphaCbs) f(state.alpha); }
+  aIn.addEventListener('input', update); wIn.addEventListener('input', update);
+  compute(); renderSide();
+  onResize(poolHost, drawPool);
+
+  // Real alpha sweeps
+  const grid = document.getElementById('alpha-grid'), rows = [];
+  D.alpha.forEach(P => {
+    const card = H('div', { class: 'mini' }, null, grid);
+    H('div', { class: 'mt' }, P.name, card);
+    const mv = H('div', { class: 'mv' }, null, card);
+    const host = H('div', { class: 'chart', tabindex: '0', role: 'img', 'aria-label': P.name + ': accuracy versus alpha' }, null, card);
+    const vals = P.pct.map(p => p[1]).concat([P.pass1]);
+    const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.1;
+    let cur = null;
+    function readout(a) {
+      const v = interp(P.pct, a), d = v - P.pass1;
+      mv.replaceChildren();
+      mv.appendChild(document.createTextNode(`α = ${a.toFixed(1)}: `));
+      H('b', null, v.toFixed(1) + '%', mv);
+      mv.appendChild(document.createTextNode(` (${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)} vs pass@1)`));
+      if (cur) cur(a, v);
+    }
+    alphaCbs.push(readout);
+    onResize(host, W => {
+      host.replaceChildren();
+      const m = { t: 10, r: 10, b: 34, l: 36 }, w = W - m.l - m.r, h = 130;
+      const svg = S('svg', { viewBox: `0 0 ${W} ${h + m.t + m.b}`, height: h + m.t + m.b }, host);
+      const x = lin(0, 8, m.l, m.l + w), y = lin(lo - pad, hi + pad, m.t + h, m.t), yt = ticks(lo - pad, hi + pad, 3);
+      axes(svg, m, w, h, x, y, [0, 2, 4, 6, 8], yt, { xLabel: 'α', yFmt: v => v.toFixed(dec(yt[1] - yt[0])) });
+      S('line', { x1: m.l, x2: m.l + w, y1: y(P.pass1), y2: y(P.pass1), class: 'ln ln-base' }, svg);
+      text(svg, m.l + w - 2, y(P.pass1) + 14 > m.t + h - 4 ? y(P.pass1) - 5 : y(P.pass1) + 14, 'pass@1', 'tick halo', 'end');
+      S('path', { d: pathD(P.pct.map(p => [x(p[0]), y(p[1])])), class: 'ln ln-cons' }, svg);
+      const cl = S('line', { y1: m.t, y2: m.t + h, class: 'xhair' }, svg);
+      const cd = S('circle', { r: 4.5, class: 'dot fill-cons' }, svg);
+      cur = (a, v) => { cl.setAttribute('x1', x(a)); cl.setAttribute('x2', x(a)); cd.setAttribute('cx', x(a)); cd.setAttribute('cy', y(v)); };
+      const xs = P.pct.map(p => x(p[0]));
+      crosshair(host, svg, m, w, h, xs, i => ({
+        title: `${P.name} · α = ${P.pct[i][0].toFixed(1)}`,
+        dots: [{ y: y(P.pct[i][1]), cls: 'fill-cons' }],
+        rows: [{ color: css('--cons'), value: P.pct[i][1].toFixed(1) + '%', label: 'consilience' }, { color: css('--base'), value: P.pass1.toFixed(1) + '%', label: 'pass@1' }],
+      }));
+      readout(state.alpha);
+    });
+    readout(state.alpha);
+    P.pct.forEach(p => rows.push([P.name, p[0].toFixed(1), p[1].toFixed(1), P.pass1.toFixed(1)]));
+  });
+  table(document.getElementById('alpha-table'), ['Setting', 'α', 'Consilience accuracy (%)', 'pass@1 (%)'], rows);
+})();
+
+/* =========================================================
+   5. Scaling with n
+   ========================================================= */
+(function scaling() {
+  const grid = document.getElementById('scale-grid'), rows = [];
+  const SER = [['pass1', 'base', 'pass@1'], ['last20', 'last', 'last-20%'], ['mean', 'over', 'mean conf.'], ['cons', 'cons', 'consilience']];
+  D.scaling.forEach(P => {
+    const card = H('div', { class: 'mini' }, null, grid);
+    H('div', { class: 'mt' }, P.name, card);
+    const host = H('div', { class: 'chart', tabindex: '0', role: 'img', 'aria-label': P.name + ': accuracy versus number of samples for four selection methods' }, null, card);
+    const all = SER.flatMap(([k]) => P[k].map(p => p[1]));
+    const lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * 0.1;
+    const ns = P.cons.map(p => p[0]);
+    onResize(host, W => {
+      host.replaceChildren();
+      const m = { t: 12, r: 12, b: 34, l: 36 }, w = W - m.l - m.r, h = 170;
+      const svg = S('svg', { viewBox: `0 0 ${W} ${h + m.t + m.b}`, height: h + m.t + m.b }, host);
+      const x = lin(0, 7, m.l, m.l + w), y = lin(lo - pad, hi + pad, m.t + h, m.t), yt = ticks(lo - pad, hi + pad, 4);
+      axes(svg, m, w, h, i => x(i), y, [0, 1, 2, 3, 4, 5, 6, 7], yt, { xFmt: i => String(2 ** i), xLabel: 'samples n', yFmt: v => v.toFixed(dec(yt[1] - yt[0])) });
+      for (const [k, cls] of SER) {
+        const pts = P[k].map((p, i) => [x(i), y(p[1])]);
+        S('path', { d: pathD(pts), class: 'ln ln-' + cls, 'stroke-width': k === 'cons' ? 2.5 : 2 }, svg);
+        if (k !== 'pass1') for (const q of pts) S('circle', { cx: q[0], cy: q[1], r: 4, class: 'dot fill-' + cls }, svg);
+      }
+      const xs = ns.map((_, i) => x(i));
+      crosshair(host, svg, m, w, h, xs, i => ({
+        title: `${P.name} · n = ${ns[i]}`,
+        dots: SER.slice().reverse().map(([k, cls]) => ({ y: y(P[k][i][1]), cls: 'fill-' + cls })),
+        rows: SER.slice().reverse().map(([k, cls, nm]) => ({ color: css('--' + cls), value: P[k][i][1].toFixed(1) + '%', label: nm })),
+      }));
+    });
+    ns.forEach((n, i) => rows.push([P.name, String(n), ...SER.map(([k]) => P[k][i][1].toFixed(1))]));
+  });
+  table(document.getElementById('scale-table'), ['Setting', 'n', 'pass@1', 'Last-20%', 'Mean conf.', 'Consilience'], rows);
+})();
+
+/* ---------- copy bibtex ---------- */
+document.getElementById('copy-bib').addEventListener('click', async e => {
+  try { await navigator.clipboard.writeText(document.getElementById('bibtex').textContent); e.target.textContent = 'Copied'; }
+  catch { e.target.textContent = 'Select and copy'; }
+  setTimeout(() => (e.target.textContent = 'Copy'), 1600);
+});
+})();
+</script>
+</body>
+</html>
