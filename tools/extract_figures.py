@@ -12,7 +12,7 @@ FIG = sys.argv[1] if len(sys.argv) > 1 else '../../cons_colm/final_figure'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'static', 'data.js')
 SRC = {
     'case': 'case_study_p3_qwen.pdf',
-    'alpha': 'alpha_sweep_lcb-qwen_lcb-gptoss:0.30_hmmt-gptoss20b_gpqa-gptoss20b.pdf',
+    'alpha': 'alpha_sweep_lcb-qwen_lcb-gptoss_0.30_hmmt-gptoss20b_gpqa-gptoss20b.pdf',
     'confdiff': 'conf_diff_qnorm_hard50_lcb-gptoss_lcb-qwen_hmmt-gptoss20b_gpqa-qwen.pdf',
     'hist_all_mean': 'hist_conf_all_mean_gptoss_lcb.pdf',
     'hist_hard_mean': 'hist_conf_hard30_mean_gptoss_lcb.pdf',
